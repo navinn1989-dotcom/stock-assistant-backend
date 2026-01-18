@@ -24,6 +24,10 @@ NSE_MAP = {
     "HDFCBANK": "HDFCBANK.NS",
 }
 
+@app.get("/")
+def root():
+    return {"status": "Stock Assistant API running"}
+
 @app.get("/stock")
 def get_stock(symbol: str = Query("TCS")):
     yf_symbol = NSE_MAP.get(symbol.upper())
