@@ -6,6 +6,9 @@ import numpy as np
 
 app = FastAPI()
 
+# ✅ 1. Add this in backend (top-level)
+last_signal = "HOLD"
+
 def calculate_rsi(close, period=14):
     delta = close.diff()
 
@@ -18,7 +21,6 @@ def calculate_rsi(close, period=14):
     rs = avg_gain / avg_loss
     rsi = 100 - (100 / (1 + rs))
 
-    # ✅ SAFETY CHECK
     if rsi.dropna().empty:
         return None
 
@@ -36,7 +38,6 @@ def get_stock(symbol: str = Query("TCS")):
             progress=False
         )
 
-        # ✅ SAFE EMPTY CHECK
         if df is None or df.empty:
             return {"error": "Invalid symbol"}
 
@@ -60,6 +61,13 @@ def get_stock(symbol: str = Query("TCS")):
             signal = "SELL"
         else:
             signal = "HOLD"
+
+        # ✅ 2. Modify signal assignment section
+        global last_signal
+        if signal != last_signal:
+            last_signal = signal
+        else:
+            signal = last_signal
 
         return {
             "symbol": symbol.upper(),
