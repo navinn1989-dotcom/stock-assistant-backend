@@ -2,55 +2,73 @@ from fastapi import FastAPI, Query
 from datetime import datetime
 import yfinance as yf
 import pandas as pd
+import numpy as np
 
 app = FastAPI()
 
-# --- STRATEGY ---
-def generate_signal(df: pd.DataFrame):
-    df["SMA5"] = df["Close"].rolling(5).mean()
-    df["SMA10"] = df["Close"].rolling(10).mean()
+def calculate_rsi(close, period=14):
+    delta = close.diff()
 
-    if df["SMA5"].iloc[-1] > df["SMA10"].iloc[-1]:
-        return "BUY"
-    elif df["SMA5"].iloc[-1] < df["SMA10"].iloc[-1]:
-        return "SELL"
-    return "HOLD"
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
 
-# --- NSE SYMBOL MAP ---
-NSE_MAP = {
-    "TCS": "TCS.NS",
-    "RELIANCE": "RELIANCE.NS",
-    "INFY": "INFY.NS",
-    "HDFCBANK": "HDFCBANK.NS",
-}
+    avg_gain = gain.rolling(period).mean()
+    avg_loss = loss.rolling(period).mean()
 
-@app.get("/")
-def root():
-    return {"status": "Stock Assistant API running"}
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+
+    # ✅ SAFETY CHECK
+    if rsi.dropna().empty:
+        return None
+
+    return round(float(rsi.dropna().iloc[-1]), 2)
 
 @app.get("/stock")
 def get_stock(symbol: str = Query("TCS")):
-    yf_symbol = NSE_MAP.get(symbol.upper())
+    try:
+        yf_symbol = symbol.upper() + ".NS"
 
-    if not yf_symbol:
-        return {"error": "Invalid symbol"}
+        df = yf.download(
+            yf_symbol,
+            period="1mo",
+            interval="5m",
+            progress=False
+        )
 
-    data = yf.download(
-        yf_symbol,
-        period="1d",
-        interval="5m",
-        progress=False,
-    )
+        # ✅ SAFE EMPTY CHECK
+        if df is None or df.empty:
+            return {"error": "Invalid symbol"}
 
-    if data.empty or len(data) < 10:
-        return {"error": "Insufficient market data"}
+        close = df["Close"].dropna()
 
-    price = round(float(data["Close"].iloc[-1]), 2)
-    signal = generate_signal(data)
+        if close.empty:
+            return {"error": "No price data"}
 
-    return {
-        "symbol": symbol,
-        "price": price,
-        "signal": signal,
-        "time": datetime.now().strftime("%H:%M:%S"),
-    }
+        price = round(float(close.iloc[-1]), 2)
+
+        ma20_series = close.rolling(20).mean().dropna()
+        ma20 = round(float(ma20_series.iloc[-1]), 2) if not ma20_series.empty else None
+
+        rsi = calculate_rsi(close)
+
+        if rsi is None:
+            signal = "HOLD"
+        elif rsi < 30:
+            signal = "BUY"
+        elif rsi > 70:
+            signal = "SELL"
+        else:
+            signal = "HOLD"
+
+        return {
+            "symbol": symbol.upper(),
+            "price": price,
+            "rsi": rsi,
+            "ma20": ma20,
+            "signal": signal,
+            "time": datetime.now().strftime("%H:%M:%S")
+        }
+
+    except Exception as e:
+        return {"error": str(e)}
