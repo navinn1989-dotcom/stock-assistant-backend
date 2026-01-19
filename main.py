@@ -52,11 +52,11 @@ def get_stock(symbol: str = Query("TCS")):
 
         rsi = calculate_rsi(close)
 
-        if rsi is None:
+        if rsi is None or ma20 is None:
             signal = "HOLD"
-        elif rsi < 30:
+        elif rsi < 30 and price > ma20:
             signal = "BUY"
-        elif rsi > 70:
+        elif rsi > 70 and price < ma20:
             signal = "SELL"
         else:
             signal = "HOLD"
