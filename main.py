@@ -27,7 +27,7 @@ def calculate_rsi(close, period=14):
     return round(float(rsi.dropna().iloc[-1]), 2)
 
 @app.get("/stock")
-def get_stock(symbol: str = Query("TCS")):
+def get_stock(symbol: str = Query("RELIANCE")):
     try:
         yf_symbol = symbol.upper() + ".NS"
 
